@@ -17,7 +17,16 @@
       <p>This page fetches and shows the smart contract version via logs.</p>
       <div>
         <label>RPC URL</label>
-        <input id="rpc" style="width:100%; padding:8px; margin: 8px 0;" value="https://api.mainnet-beta.solana.com" />
+        <div style="display:flex; gap:8px; margin: 8px 0; align-items:center;">
+          <select id="rpcPreset" style="padding:8px; border-radius:8px;">
+            <option value="localnet">Localnet (Docs IP)</option>
+            <option value="ngrok">Public Localnet (ngrok)</option>
+            <option value="devnet">Devnet</option>
+            <option value="mainnet">Mainnet</option>
+            <option value="custom">Custom...</option>
+          </select>
+          <input id="rpc" style="flex:1; padding:8px;" />
+        </div>
       </div>
       <button id="btn" class="btn">Get Version</button>
       <div id="out" class="out"></div>
@@ -25,42 +34,116 @@
 
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <script>
-      const PROGRAM_ID = new solanaWeb3.PublicKey('4aeVqtWhrUh6wpX8acNj2hpWXKEQwxjA3PYb2sHhNyCn');
       const GET_VERSION_DISCRIMINATOR = 14; // 0x0E per docs
 
-      async function getContractVersionWeb(connection) {
+      async function getContractVersionWeb(connection, programId) {
         const instruction = new solanaWeb3.TransactionInstruction({
           keys: [],
-          programId: PROGRAM_ID,
+          programId,
           data: new Uint8Array([GET_VERSION_DISCRIMINATOR]),
         });
 
-        const tx = new solanaWeb3.Transaction().add(instruction);
+        // Use versioned transactions (v0) to avoid RPC argument errors on some validators
         const payer = solanaWeb3.Keypair.generate();
-        const { blockhash } = await connection.getLatestBlockhash();
-        tx.feePayer = payer.publicKey;
-        tx.recentBlockhash = blockhash;
-        tx.sign(payer);
+        const { blockhash } = await connection.getLatestBlockhash('confirmed');
 
-        const sim = await connection.simulateTransaction(tx, { commitment: 'confirmed' });
+        // Try to fund the ephemeral payer on localnet/devnet so simulation has all accounts
+        try {
+          const sig = await connection.requestAirdrop(payer.publicKey, 1_000_000); // 0.001 SOL
+          const bh = await connection.getLatestBlockhash('confirmed');
+          await connection.confirmTransaction({ signature: sig, ...bh }, 'confirmed');
+        } catch (_) {
+          // Ignore errors on mainnet or if faucet not available
+        }
+        const message = new solanaWeb3.TransactionMessage({
+          payerKey: payer.publicKey,
+          recentBlockhash: blockhash,
+          instructions: [instruction],
+        }).compileToV0Message();
+
+        const vtx = new solanaWeb3.VersionedTransaction(message);
+        vtx.sign([payer]);
+
+        const sim = await connection.simulateTransaction(vtx);
         const logs = (sim.value && sim.value.logs) || [];
-        return extractVersionFromLogs(logs);
+        return { version: extractVersionFromLogs(logs), logs };
       }
 
       function extractVersionFromLogs(logs) {
         const out = {};
         for (const log of logs) {
-          if (log.includes('Contract Name:')) out.name = log.split('Contract Name:')[1].trim();
-          if (log.includes('Contract Version:')) out.version = log.split('Contract Version:')[1].trim();
-          if (log.includes('Build Date:')) out.build = log.split('Build Date:')[1].trim();
+          const line = String(log);
+          if (/Contract Name:/i.test(line)) out.name = line.split(/Contract Name:/i)[1].trim();
+          const verMatch = line.match(/Contract Version:\s*([0-9.]+)/i) || line.match(/Version:\s*([0-9.]+)/i);
+          if (verMatch) out.version = verMatch[1];
+          if (/Build Date:/i.test(line)) out.build = line.split(/Build Date:/i)[1].trim();
         }
-        if (!out.name && !out.version) return 'Version info not available';
+        if (!out.name && !out.version && !out.build) return 'Version info not available';
         return [out.name && `Name: ${out.name}`, out.version && `Version: ${out.version}`, out.build && `Build: ${out.build}`].filter(Boolean).join(' | ');
       }
 
       const btn = document.getElementById('btn');
       const outEl = document.getElementById('out');
       const rpc = document.getElementById('rpc');
+      const rpcPreset = document.getElementById('rpcPreset');
+      
+      // Extra controls
+      const programIdContainer = document.createElement('div');
+      programIdContainer.innerHTML = `
+        <label>Program ID</label>
+        <input id="programId" style="width:100%; padding:8px; margin: 8px 0;" />
+      `;
+      document.querySelector('.card > div').insertAdjacentElement('afterend', programIdContainer);
+      const programIdInput = document.getElementById('programId');
+
+      const corsContainer = document.createElement('div');
+      corsContainer.innerHTML = `
+        <label>CORS Proxy (optional)</label>
+        <input id="corsProxy" placeholder="e.g. https://cors.isomorphic-git.org" style="width:100%; padding:8px; margin: 8px 0;" />
+      `;
+      programIdContainer.insertAdjacentElement('afterend', corsContainer);
+      const corsProxyInput = document.getElementById('corsProxy');
+
+      const PRESETS = {
+        localnet: {
+          rpc: 'http://192.168.2.88:8899',
+          programId: '4aeVqtWhrUh6wpX8acNj2hpWXKEQwxjA3PYb2sHhNyCn',
+        },
+        ngrok: {
+          rpc: 'https://fixed.ngrok.app',
+          programId: '4aeVqtWhrUh6wpX8acNj2hpWXKEQwxjA3PYb2sHhNyCn',
+        },
+        devnet: {
+          rpc: 'https://api.devnet.solana.com',
+          programId: '9iqh69RqeG3RRrFBNZVoE77TMRvYboFUtC2sykaFVzB7',
+        },
+        mainnet: {
+          rpc: 'https://api.mainnet-beta.solana.com',
+          programId: 'quXSYkeZ8ByTCtYY1J1uxQmE36UZ3LmNGgE3CYMFixD',
+        },
+      };
+
+      function applyPreset(preset) {
+        if (preset === 'custom') {
+          rpc.disabled = false;
+          rpc.focus();
+        } else {
+          rpc.value = (PRESETS[preset] && PRESETS[preset].rpc) || '';
+          rpc.disabled = true;
+        }
+        // Always set program ID based on preset, but allow editing
+        if (PRESETS[preset] && PRESETS[preset].programId) {
+          programIdInput.value = PRESETS[preset].programId;
+        }
+      }
+
+      // Default to Localnet from docs
+      rpcPreset.value = 'localnet';
+      applyPreset('localnet');
+
+      rpcPreset.addEventListener('change', (e) => {
+        applyPreset(e.target.value);
+      });
 
       function log(msg) { outEl.textContent += `${msg}\n`; }
       function clear() { outEl.textContent = ''; }
@@ -68,15 +151,49 @@
       btn.addEventListener('click', async () => {
         try {
           clear();
-          const url = rpc.value.trim();
+          let url = rpc.value.trim();
+          const programId = new solanaWeb3.PublicKey(programIdInput.value.trim());
+          const proxy = corsProxyInput.value.trim();
+          if (proxy) {
+            const base = proxy.replace(/\/$/, '');
+            // Support both styles: cors.isomorphic-git (expects full URL appended) and generic reverse proxies
+            url = `${base}/${url}`;
+          }
           log(`Connecting to ${url} ...`);
           const conn = new solanaWeb3.Connection(url, 'confirmed');
-          const version = await getContractVersionWeb(conn);
+          const { version, logs } = await getContractVersionWeb(conn, programId);
           log(`Version: ${version}`);
+          if (version === 'Version info not available' && logs && logs.length) {
+            log('Raw logs:');
+            logs.forEach((l) => log(`  ${l}`));
+            log('Tip: Ensure Program ID matches the selected network.');
+          }
         } catch (e) {
           log(`Error: ${e?.message || e}`);
+          const msg = (e?.message || '').toLowerCase();
+          const isBlockhash = /get recent blockhash|load failed|failed to fetch/.test(msg);
+          if (isBlockhash) {
+            log('This HTML page must be served by a web server and the RPC must be CORS-accessible.');
+            log('Quick fix (Localnet):');
+            log('  1) Start proxy:');
+            log('     TARGET_RPC=http://192.168.2.88:8899 PORT=8787 node examples/dev-proxy.js');
+            log('  2) Serve the page (do not use file://):');
+            log('     npx http-server examples -p 8080 | cat');
+            log('  3) Open:  http://localhost:8080/version-web.html');
+            log('  4) Preset: Localnet (Docs IP)');
+            log('  5) CORS Proxy: http://localhost:8787');
+            log('  6) Click Get Version');
+            log('Alternatively, select the "Public Localnet (ngrok)" preset and leave CORS Proxy empty.');
+          }
         }
       });
+
+      // Warn if opened via file://
+      if (window.location.protocol === 'file:') {
+        clear();
+        log('Warning: This page is opened via file:// and browser requests to RPC will likely fail.');
+        log('Please serve the page with a local web server as shown in the steps above.');
+      }
     </script>
   </body>
   </html>
