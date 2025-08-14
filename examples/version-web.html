@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FRT Version Demo</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px; }
+      .card { max-width: 720px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; }
+      .btn { background: #4f46e5; color: white; border: 0; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+      .out { margin-top: 16px; padding: 12px; background: #0f172a; color: #e2e8f0; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>Fixed Ratio Trading - Version</h2>
+      <p>This page fetches and shows the smart contract version via logs.</p>
+      <div>
+        <label>RPC URL</label>
+        <input id="rpc" style="width:100%; padding:8px; margin: 8px 0;" value="https://api.mainnet-beta.solana.com" />
+      </div>
+      <button id="btn" class="btn">Get Version</button>
+      <div id="out" class="out"></div>
+    </div>
+
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script>
+      const PROGRAM_ID = new solanaWeb3.PublicKey('4aeVqtWhrUh6wpX8acNj2hpWXKEQwxjA3PYb2sHhNyCn');
+      const GET_VERSION_DISCRIMINATOR = 14; // 0x0E per docs
+
+      async function getContractVersionWeb(connection) {
+        const instruction = new solanaWeb3.TransactionInstruction({
+          keys: [],
+          programId: PROGRAM_ID,
+          data: new Uint8Array([GET_VERSION_DISCRIMINATOR]),
+        });
+
+        const tx = new solanaWeb3.Transaction().add(instruction);
+        const payer = solanaWeb3.Keypair.generate();
+        const { blockhash } = await connection.getLatestBlockhash();
+        tx.feePayer = payer.publicKey;
+        tx.recentBlockhash = blockhash;
+        tx.sign(payer);
+
+        const sim = await connection.simulateTransaction(tx, { commitment: 'confirmed' });
+        const logs = (sim.value && sim.value.logs) || [];
+        return extractVersionFromLogs(logs);
+      }
+
+      function extractVersionFromLogs(logs) {
+        const out = {};
+        for (const log of logs) {
+          if (log.includes('Contract Name:')) out.name = log.split('Contract Name:')[1].trim();
+          if (log.includes('Contract Version:')) out.version = log.split('Contract Version:')[1].trim();
+          if (log.includes('Build Date:')) out.build = log.split('Build Date:')[1].trim();
+        }
+        if (!out.name && !out.version) return 'Version info not available';
+        return [out.name && `Name: ${out.name}`, out.version && `Version: ${out.version}`, out.build && `Build: ${out.build}`].filter(Boolean).join(' | ');
+      }
+
+      const btn = document.getElementById('btn');
+      const outEl = document.getElementById('out');
+      const rpc = document.getElementById('rpc');
+
+      function log(msg) { outEl.textContent += `${msg}\n`; }
+      function clear() { outEl.textContent = ''; }
+
+      btn.addEventListener('click', async () => {
+        try {
+          clear();
+          const url = rpc.value.trim();
+          log(`Connecting to ${url} ...`);
+          const conn = new solanaWeb3.Connection(url, 'confirmed');
+          const version = await getContractVersionWeb(conn);
+          log(`Version: ${version}`);
+        } catch (e) {
+          log(`Error: ${e?.message || e}`);
+        }
+      });
+    </script>
+  </body>
+  </html>
+

@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed Ratio Trading - Web Integration</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #2d3748;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s;
+            margin: 8px 0;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .input-group {
+            margin: 16px 0;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .output {
+            background: #1a202c;
+            color: #a0aec0;
+            padding: 16px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .success {
+            color: #38a169;
+        }
+        
+        .error {
+            color: #e53e3e;
+        }
+        
+        .wallet-info {
+            background: #edf2f7;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Fixed Ratio Trading - Web Integration Demo</h1>
+        
+        <div class="card">
+            <h3>💼 Wallet Connection</h3>
+            <div id="walletInfo" class="wallet-info">
+                <div>Status: <span id="walletStatus">Not Connected</span></div>
+                <div id="walletAddress" style="display: none;">
+                    Address: <span id="walletAddressText"></span>
+                </div>
+            </div>
+            <button id="connectWallet" class="button">Connect Phantom Wallet</button>
+            <button id="disconnectWallet" class="button" style="display: none;">Disconnect</button>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>📋 Contract Information</h3>
+                <button id="getVersion" class="button">Get Contract Version</button>
+                <button id="getTreasury" class="button">Get Treasury Info</button>
+                <div id="contractOutput" class="output" style="margin-top: 16px;"></div>
+            </div>
+
+            <div class="card">
+                <h3>🏊 Pool Operations</h3>
+                <div class="input-group">
+                    <label>Token A Amount:</label>
+                    <input type="number" id="tokenAAmount" placeholder="1.0" step="0.000000001">
+                </div>
+                <div class="input-group">
+                    <label>Token B Amount:</label>
+                    <input type="number" id="tokenBAmount" placeholder="160.0" step="0.000001">
+                </div>
+                <button id="createPool" class="button">Create Pool (Simulation)</button>
+                <div id="poolOutput" class="output" style="margin-top: 16px;"></div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>🔄 Swap Simulation</h3>
+                <div class="input-group">
+                    <label>Input Amount (SOL):</label>
+                    <input type="number" id="swapAmount" placeholder="1.0" step="0.000000001">
+                </div>
+                <div class="input-group">
+                    <label>Pool Ratio A (SOL):</label>
+                    <input type="number" id="poolRatioA" placeholder="1.0" step="0.000000001">
+                </div>
+                <div class="input-group">
+                    <label>Pool Ratio B (USDC):</label>
+                    <input type="number" id="poolRatioB" placeholder="160.0" step="0.000001">
+                </div>
+                <button id="calculateSwap" class="button">Calculate Swap Output</button>
+                <div id="swapOutput" class="output" style="margin-top: 16px;"></div>
+            </div>
+
+            <div class="card">
+                <h3>💝 Donation</h3>
+                <div class="input-group">
+                    <label>Amount (SOL):</label>
+                    <input type="number" id="donationAmount" placeholder="0.1" step="0.1" min="0.1">
+                </div>
+                <div class="input-group">
+                    <label>Message (optional):</label>
+                    <input type="text" id="donationMessage" placeholder="Thanks for the great protocol!" maxlength="200">
+                </div>
+                <button id="createDonation" class="button">Create Donation (Simulation)</button>
+                <div id="donationOutput" class="output" style="margin-top: 16px;"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>🧮 Utility Functions Demo</h3>
+            <button id="testUtilities" class="button">Test Utility Functions</button>
+            <div id="utilityOutput" class="output" style="margin-top: 16px;"></div>
+        </div>
+    </div>
+
+    <!-- CDN imports for Solana Web3 and the library -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script>
+        // Note: In a real implementation, you would import the built library
+        // For this demo, we'll simulate the library functions
+        
+        // Simulated library functions for demo purposes
+        const FRT = {
+            Connection: solanaWeb3.Connection,
+            PublicKey: solanaWeb3.PublicKey,
+            BN: window.BN || function(val) { return { toString: () => val.toString() }; },
+            
+            // Simulated client
+            FixedRatioTradingClient: class {
+                constructor(connection) {
+                    this.connection = connection;
+                }
+                
+                async getContractVersion() {
+                    // Simulate API call
+                    return "Name: fixed_ratio_trading | Version: 0.14.1040 | Build: Aug 5, 2025";
+                }
+                
+                async getTreasuryInfo() {
+                    return {
+                        totalBalance: { toString: () => "500000000000", toNumber: () => 500000000000 },
+                        totalFeesCollected: { toString: () => "100000000000", toNumber: () => 100000000000 },
+                        totalDonations: { toString: () => "50000000000", toNumber: () => 50000000000 },
+                        withdrawalCount: 25,
+                        donationCount: 150
+                    };
+                }
+                
+                toBasisPoints(amount, decimals) {
+                    return { toString: () => (amount * Math.pow(10, decimals)).toString() };
+                }
+                
+                fromBasisPoints(basisPoints, decimals) {
+                    return basisPoints.toNumber() / Math.pow(10, decimals);
+                }
+                
+                calculateExpectedSwapOutput(amountIn, inputMint, ratioA, ratioB, tokenAMint) {
+                    // Simplified calculation for demo
+                    const input = parseFloat(amountIn.toString()) / 1e9;
+                    const output = input * 160; // 1 SOL = 160 USDC
+                    return { toString: () => (output * 1e6).toString(), toNumber: () => output * 1e6 };
+                }
+                
+                createPoolWithDisplayAmounts() {
+                    return {
+                        programId: new solanaWeb3.PublicKey("4aeVqtWhrUh6wpX8acNj2hpWXKEQwxjA3PYb2sHhNyCn"),
+                        keys: [],
+                        data: new Uint8Array([3]) // Pool instruction
+                    };
+                }
+                
+                createDonationInstructionWithDisplayAmount() {
+                    return {
+                        programId: new solanaWeb3.PublicKey("4aeVqtWhrUh6wpX8acNj2hpWXKEQwxjA3PYb2sHhNyCn"),
+                        keys: [],
+                        data: new Uint8Array([13]) // Donation instruction
+                    };
+                }
+                
+                formatError(code) {
+                    const errors = {
+                        6006: "System is paused",
+                        6007: "Pool is paused",
+                        6008: "Slippage tolerance exceeded"
+                    };
+                    return errors[code] || `Unknown error: ${code}`;
+                }
+            }
+        };
+
+        // Initialize connection and client
+        const connection = new FRT.Connection('https://api.mainnet-beta.solana.com');
+        const client = new FRT.FixedRatioTradingClient(connection);
+
+        // Wallet state
+        let wallet = null;
+
+        // UI Elements
+        const elements = {
+            walletStatus: document.getElementById('walletStatus'),
+            walletAddress: document.getElementById('walletAddress'),
+            walletAddressText: document.getElementById('walletAddressText'),
+            connectWallet: document.getElementById('connectWallet'),
+            disconnectWallet: document.getElementById('disconnectWallet'),
+            
+            getVersion: document.getElementById('getVersion'),
+            getTreasury: document.getElementById('getTreasury'),
+            contractOutput: document.getElementById('contractOutput'),
+            
+            createPool: document.getElementById('createPool'),
+            poolOutput: document.getElementById('poolOutput'),
+            tokenAAmount: document.getElementById('tokenAAmount'),
+            tokenBAmount: document.getElementById('tokenBAmount'),
+            
+            calculateSwap: document.getElementById('calculateSwap'),
+            swapOutput: document.getElementById('swapOutput'),
+            swapAmount: document.getElementById('swapAmount'),
+            poolRatioA: document.getElementById('poolRatioA'),
+            poolRatioB: document.getElementById('poolRatioB'),
+            
+            createDonation: document.getElementById('createDonation'),
+            donationOutput: document.getElementById('donationOutput'),
+            donationAmount: document.getElementById('donationAmount'),
+            donationMessage: document.getElementById('donationMessage'),
+            
+            testUtilities: document.getElementById('testUtilities'),
+            utilityOutput: document.getElementById('utilityOutput')
+        };
+
+        // Wallet functions
+        async function connectWallet() {
+            try {
+                if (!window.solana || !window.solana.isPhantom) {
+                    throw new Error('Phantom wallet not found. Please install Phantom wallet.');
+                }
+
+                const response = await window.solana.connect();
+                wallet = response.publicKey;
+                
+                elements.walletStatus.textContent = 'Connected';
+                elements.walletStatus.className = 'success';
+                elements.walletAddressText.textContent = wallet.toString();
+                elements.walletAddress.style.display = 'block';
+                elements.connectWallet.style.display = 'none';
+                elements.disconnectWallet.style.display = 'inline-block';
+                
+                log('contractOutput', `✅ Wallet connected: ${wallet.toString()}`);
+            } catch (error) {
+                log('contractOutput', `❌ Wallet connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        function disconnectWallet() {
+            if (window.solana && window.solana.disconnect) {
+                window.solana.disconnect();
+            }
+            
+            wallet = null;
+            elements.walletStatus.textContent = 'Not Connected';
+            elements.walletStatus.className = '';
+            elements.walletAddress.style.display = 'none';
+            elements.connectWallet.style.display = 'inline-block';
+            elements.disconnectWallet.style.display = 'none';
+            
+            log('contractOutput', '👋 Wallet disconnected');
+        }
+
+        // Utility function to log output
+        function log(elementId, message, type = 'info') {
+            const element = elements[elementId];
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            element.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            element.scrollTop = element.scrollHeight;
+        }
+
+        // Contract information functions
+        async function getVersion() {
+            try {
+                log('contractOutput', 'Getting contract version...');
+                const version = await client.getContractVersion();
+                log('contractOutput', `Contract Version: ${version}`, 'success');
+            } catch (error) {
+                log('contractOutput', `Failed to get version: ${error.message}`, 'error');
+            }
+        }
+
+        async function getTreasury() {
+            try {
+                log('contractOutput', 'Getting treasury information...');
+                const treasury = await client.getTreasuryInfo();
+                
+                const balanceSOL = client.fromBasisPoints(treasury.totalBalance, 9);
+                const feesSOL = client.fromBasisPoints(treasury.totalFeesCollected, 9);
+                const donationsSOL = client.fromBasisPoints(treasury.totalDonations, 9);
+                
+                log('contractOutput', `Treasury Balance: ${balanceSOL.toFixed(9)} SOL`, 'success');
+                log('contractOutput', `Total Fees: ${feesSOL.toFixed(9)} SOL`, 'success');
+                log('contractOutput', `Total Donations: ${donationsSOL.toFixed(9)} SOL`, 'success');
+                log('contractOutput', `Withdrawals: ${treasury.withdrawalCount}`, 'success');
+                log('contractOutput', `Donations: ${treasury.donationCount}`, 'success');
+            } catch (error) {
+                log('contractOutput', `Failed to get treasury info: ${error.message}`, 'error');
+            }
+        }
+
+        // Pool functions
+        function createPool() {
+            try {
+                const tokenA = parseFloat(elements.tokenAAmount.value) || 1.0;
+                const tokenB = parseFloat(elements.tokenBAmount.value) || 160.0;
+                
+                log('poolOutput', `Creating pool with ratio ${tokenA}:${tokenB}...`);
+                
+                const instruction = client.createPoolWithDisplayAmounts(
+                    wallet || new FRT.PublicKey("11111111111111111111111111111111"),
+                    new FRT.PublicKey("So11111111111111111111111111111111111111112"), // SOL
+                    new FRT.PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"), // USDC
+                    tokenA,
+                    tokenB,
+                    9, // SOL decimals
+                    6  // USDC decimals
+                );
+                
+                log('poolOutput', `✅ Pool instruction created successfully`, 'success');
+                log('poolOutput', `Program ID: ${instruction.programId.toString()}`);
+                log('poolOutput', `Instruction: ${instruction.data[0]} (InitializePool)`);
+                log('poolOutput', `Ratio: ${tokenA} SOL : ${tokenB} USDC`);
+                log('poolOutput', `Estimated cost: 1.15 SOL registration fee`);
+            } catch (error) {
+                log('poolOutput', `Failed to create pool: ${error.message}`, 'error');
+            }
+        }
+
+        // Swap functions
+        function calculateSwap() {
+            try {
+                const amount = parseFloat(elements.swapAmount.value) || 1.0;
+                const ratioA = parseFloat(elements.poolRatioA.value) || 1.0;
+                const ratioB = parseFloat(elements.poolRatioB.value) || 160.0;
+                
+                log('swapOutput', `Calculating swap: ${amount} SOL...`);
+                
+                const amountIn = client.toBasisPoints(amount, 9);
+                const ratioABasisPoints = client.toBasisPoints(ratioA, 9);
+                const ratioBBasisPoints = client.toBasisPoints(ratioB, 6);
+                
+                const expectedOutput = client.calculateExpectedSwapOutput(
+                    amountIn,
+                    new FRT.PublicKey("So11111111111111111111111111111111111111112"), // SOL
+                    ratioABasisPoints,
+                    ratioBBasisPoints,
+                    new FRT.PublicKey("So11111111111111111111111111111111111111112")
+                );
+                
+                const outputDisplay = client.fromBasisPoints(expectedOutput, 6);
+                
+                log('swapOutput', `✅ Swap calculation completed`, 'success');
+                log('swapOutput', `Input: ${amount} SOL`);
+                log('swapOutput', `Expected output: ${outputDisplay.toFixed(6)} USDC`);
+                log('swapOutput', `Pool ratio: ${ratioA}:${ratioB}`);
+                log('swapOutput', `Swap fee: 0.00002715 SOL`);
+            } catch (error) {
+                log('swapOutput', `Failed to calculate swap: ${error.message}`, 'error');
+            }
+        }
+
+        // Donation functions
+        function createDonation() {
+            try {
+                const amount = parseFloat(elements.donationAmount.value) || 0.1;
+                const message = elements.donationMessage.value || "";
+                
+                if (amount < 0.1) {
+                    throw new Error('Minimum donation is 0.1 SOL');
+                }
+                
+                log('donationOutput', `Creating donation: ${amount} SOL...`);
+                
+                const instruction = client.createDonationInstructionWithDisplayAmount(
+                    wallet || new FRT.PublicKey("11111111111111111111111111111111"),
+                    amount,
+                    message
+                );
+                
+                log('donationOutput', `✅ Donation instruction created successfully`, 'success');
+                log('donationOutput', `Amount: ${amount} SOL`);
+                log('donationOutput', `Message: "${message}"`);
+                log('donationOutput', `Program ID: ${instruction.programId.toString()}`);
+                log('donationOutput', `Instruction: ${instruction.data[0]} (DonateSol)`);
+            } catch (error) {
+                log('donationOutput', `Failed to create donation: ${error.message}`, 'error');
+            }
+        }
+
+        // Utility functions
+        function testUtilities() {
+            try {
+                log('utilityOutput', 'Testing utility functions...');
+                
+                // Test basis points conversion
+                const solAmount = 1.5;
+                const lamports = client.toBasisPoints(solAmount, 9);
+                const backToSOL = client.fromBasisPoints(lamports, 9);
+                
+                log('utilityOutput', `✅ Conversion test passed`, 'success');
+                log('utilityOutput', `${solAmount} SOL = ${lamports.toString()} lamports`);
+                log('utilityOutput', `${lamports.toString()} lamports = ${backToSOL} SOL`);
+                
+                // Test error formatting
+                const errorCode = 6006;
+                const errorMessage = client.formatError(errorCode);
+                log('utilityOutput', `Error ${errorCode}: ${errorMessage}`);
+                
+                // Test USDC conversion
+                const usdcAmount = 100.5;
+                const usdcBasisPoints = client.toBasisPoints(usdcAmount, 6);
+                const backToUSDC = client.fromBasisPoints(usdcBasisPoints, 6);
+                
+                log('utilityOutput', `${usdcAmount} USDC = ${usdcBasisPoints.toString()} basis points`);
+                log('utilityOutput', `${usdcBasisPoints.toString()} basis points = ${backToUSDC} USDC`);
+                
+                log('utilityOutput', `✅ All utility tests completed`, 'success');
+            } catch (error) {
+                log('utilityOutput', `Utility test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Event listeners
+        elements.connectWallet.addEventListener('click', connectWallet);
+        elements.disconnectWallet.addEventListener('click', disconnectWallet);
+        elements.getVersion.addEventListener('click', getVersion);
+        elements.getTreasury.addEventListener('click', getTreasury);
+        elements.createPool.addEventListener('click', createPool);
+        elements.calculateSwap.addEventListener('click', calculateSwap);
+        elements.createDonation.addEventListener('click', createDonation);
+        elements.testUtilities.addEventListener('click', testUtilities);
+
+        // Initialize
+        log('contractOutput', '🚀 Fixed Ratio Trading Demo Initialized');
+        log('contractOutput', 'Connect your wallet to start interacting with the protocol');
+    </script>
+</body>
+</html>

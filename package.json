@@ -1,0 +1,35 @@
+{
+  "name": "frt-js-lib",
+  "version": "1.0.0",
+  "description": "JavaScript library for Fixed Ratio Trading protocol - functions accessible to all users",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "test:version": "node tests/version-node.js"
+  },
+  "keywords": [
+    "solana",
+    "defi",
+    "trading",
+    "fixed-ratio",
+    "liquidity",
+    "swap"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@solana/web3.js": "^1.87.6",
+    "@solana/spl-token": "^0.3.9",
+    "bn.js": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@solana/web3.js": ">=1.70.0",
+    "@solana/spl-token": ">=0.3.0"
+  }
+}
